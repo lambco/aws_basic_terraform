@@ -1,3 +1,5 @@
+//chapter2
+
 provider "aws" {
   region = "ap-northeast-1"
 }
