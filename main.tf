@@ -12,6 +12,24 @@ resource "aws_internet_gateway" "gateway" {
   vpc_id = aws_vpc.vpc_zone.id
 }
 
+resource "aws_eip" "nat_gateway" {
+  vpc     = true
+  depends_on = [aws_internet_gateway.gateway]
+}
+
+resource "aws_nat_gateway" "gateway" {
+  allocation_id = aws_eip.nat_gateway.id
+  subnet_id     = aws_subnet.public.id
+  depends_on    = [aws_internet_gateway.gateway]
+}
+
+
+resource "aws_route" "private" {
+  route_table_id         = aws_route_table.private.id
+  nat_gateway_id         = aws_nat_gateway.gateway.id
+  destination_cidr_block = "0.0.0.0/0"
+}
+
 resource "aws_route_table" "route_table" {
   vpc_id = aws_vpc.vpc_zone.id
 }
@@ -24,17 +42,6 @@ resource "aws_subnet" "public" {
 
   tags = {
     Name = "パブリックサブネット"
-  }
-}
-
-resource "aws_subnet" "private" {
-  vpc_id                  = aws_vpc.vpc_zone.id
-  cidr_block              = "10.0.2.0/24"
-  availability_zone       = "ap-northeast-1a"
-  map_public_ip_on_launch = false
-
-  tags = {
-    Name = "プライベートサブネット"
   }
 }
 
@@ -54,6 +61,27 @@ resource "aws_route" "public" {
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
+}
+
+
+resource "aws_subnet" "private" {
+  vpc_id                  = aws_vpc.vpc_zone.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "ap-northeast-1a"
+  map_public_ip_on_launch = false
+
+  tags = {
+    Name = "プライベートサブネット"
+  }
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.vpc_zone.id
+}
+
+resource "aws_route_table_association" "private" {
+  subnet_id      = aws_subnet.private.id
+  route_table_id = aws_route_table.private.id
 }
 
 # AMI Profile
@@ -158,6 +186,13 @@ resource "aws_security_group" "db_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -178,7 +213,6 @@ resource "aws_instance" "db_server" {
     Name = "DBサーバー"
   }
 }
-
 
 resource "aws_key_pair" "my_key" {
   key_name   = "my-key"
